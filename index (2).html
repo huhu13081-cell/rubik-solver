@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rubik’s Cube Solver</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f6f4;--fg:#1c1c1a;--mut:#6b6b66;--card:#fff;--bd:#dcdcd6;--ac:#2557d6}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#151514;--fg:#ececea;--mut:#9a9a94;--card:#201f1e;--bd:#3a3935;--ac:#5b88f0}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#151514;--fg:#ececea;--mut:#9a9a94;--card:#201f1e;--bd:#3a3935;--ac:#5b88f0}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:22px;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lbl{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+button{font:inherit;color:inherit;background:var(--card);border:1px solid var(--bd);border-radius:9px;padding:7px 12px;cursor:pointer}
+button[aria-pressed=true]{border-color:var(--ac);box-shadow:0 0 0 2px var(--ac)}
+button.pri{background:var(--ac);color:#fff;border-color:var(--ac);font-weight:600}
+.sw{width:38px;height:38px;padding:0;border-radius:50%}
+.wrap{overflow-x:auto;padding:6px 0}
+#net{display:grid;grid-template-columns:repeat(4,auto);grid-template-rows:repeat(3,auto);gap:calc(var(--s) * .3);width:max-content;margin:0 auto;touch-action:none;user-select:none;-webkit-user-select:none}
+.face{display:grid;grid-template-columns:repeat(var(--n),var(--s));gap:2px;padding:2px;background:#111;border-radius:6px}
+.face i{width:var(--s);height:var(--s);border-radius:3px;display:block;cursor:crosshair}
+.face i.lk{box-shadow:inset 0 0 0 2px rgba(0,0,0,.4);cursor:not-allowed}
+.chip{display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border:1px solid var(--bd);border-radius:99px;font-size:13px}
+.chip b{width:12px;height:12px;border-radius:50%;border:1px solid #0004}
+.chip.ok{border-color:#1fa34a}.chip.bad{border-color:#d93a2f;color:#d93a2f}
+.mv{padding:3px 9px;font-family:ui-monospace,Menlo,monospace;font-size:14px}
+.mv.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+#msg{margin:10px 0 0;color:var(--mut)}#msg.err{color:#d93a2f}
+.face i.bd{box-shadow:inset 0 0 0 3px #ff1744,inset 0 0 0 5px #fff}
+#scene{height:330px;perspective:900px;display:grid;place-items:center;touch-action:none;cursor:grab;overflow:hidden;user-select:none;-webkit-user-select:none}
+#scene:active{cursor:grabbing}
+#cube{width:0;height:0;position:relative;transform-style:preserve-3d}
+.cb{position:absolute;width:var(--c);height:var(--c);left:calc(var(--c) / -2);top:calc(var(--c) / -2);transform-style:preserve-3d}
+.cb u{position:absolute;inset:0;background:#0d0d0d;backface-visibility:hidden}
+.cb u.s{box-shadow:inset 0 0 0 4px #0d0d0d;border-radius:12%}
+.cb .F{transform:translateZ(calc(var(--c) / 2))}
+.cb .B{transform:rotateY(180deg) translateZ(calc(var(--c) / 2))}
+.cb .R{transform:rotateY(90deg) translateZ(calc(var(--c) / 2))}
+.cb .L{transform:rotateY(-90deg) translateZ(calc(var(--c) / 2))}
+.cb .U{transform:rotateX(90deg) translateZ(calc(var(--c) / 2))}
+.cb .D{transform:rotateX(-90deg) translateZ(calc(var(--c) / 2))}
+</style>
+</head>
+<body>
+<main>
+<h1>Rubik’s Cube Solver</h1>
+<p class="sub">Pick a size, paint every face to match your cube, then solve.</p>
+
+<div class="card">
+  <div class="lbl">Cube size</div>
+  <div class="row" id="sizes"></div>
+</div>
+
+<div class="card">
+  <div class="lbl">Paint colour (click or drag over stickers)</div>
+  <div class="row" id="pal"></div>
+  <div class="wrap"><div id="net"></div></div>
+  <p class="sub" style="margin:8px 0 10px;font-size:13px">Hold the cube with any face up and any face towards you, then paint the net as if it were unfolded: up above front, left and right beside front, back beside right, down below front. On a 3×3 any colour scheme works — paint the centres too. On a 2×2 use white up, green front.</p>
+  <div class="row" id="counts"></div>
+  <div class="row" style="margin-top:12px">
+    <button class="pri" id="solve">Solve</button>
+    <button id="reset">Reset to solved</button>
+    <button id="clear">Clear paint</button>
+    <button id="scr">Random scramble</button>
+  </div>
+  <p id="msg" role="status"></p>
+</div>
+
+<div class="card" id="sol" hidden>
+  <div class="lbl">Solution <span id="pos"></span></div>
+  <div id="scene"><div id="cube"></div></div>
+  <input type="range" id="sl" min="0" value="0" style="width:100%;margin:8px 0" aria-label="Step">
+  <div class="row" id="moves" style="margin-bottom:12px"></div>
+  <div class="row">
+    <button id="first">⏮</button><button id="prev">◀ Back</button><button id="next">Next ▶</button><button id="play">▶ Play</button>
+  </div>
+  <p class="sub" style="margin:10px 0 0;font-size:13px">Clockwise face turns; ’ is counter-clockwise, 2 is a half-turn. Drag the cube to rotate your view, tap any step or use the slider to jump there, and use the left and right arrow keys to step back and forward.</p>
+</div>
+<p class="sub" style="text-align:center;margin:24px 0 0;font-size:13px">Discord: <b>@true_a</b></p>
+<p class="sub" style="text-align:center;margin:4px 0 0;font-size:13px">Made by khôi</p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/cube.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/solve.js"></script>
+<script>
+const F='URFDLB',
+COL={U:'#f4f4f0',R:'#d93a2f',F:'#1fa34a',D:'#f3c81c',L:'#f28a1d',B:'#2858d8','-':'#4a4a47'},
+NM={U:'White',R:'Red',F:'Green',D:'Yellow',L:'Orange',B:'Blue','-':'Eraser'},
+POS={U:[1,2],L:[2,1],F:[2,2],R:[2,3],B:[2,4],D:[3,2]},
+$=i=>document.getElementById(i), net=$('net');
+let N=3,S={},brush='U',steps=null,mv=[],k=0,down=false,timer=null,inited=false;
+const lock=()=>false;
+
+function reset(){S={};for(const f of F)S[f]=Array(N*N).fill(f)}
+function clr(){for(const f of F){S[f]=Array(N*N).fill('-');if(N%2)S[f][(N*N-1)/2]=f}}
+function render(){
+  const v=S,sz=[0,0,38,34,28,24,20,17][N];
+  net.style.setProperty('--s',sz+'px');net.style.setProperty('--n',N);
+  net.innerHTML=[...F].map(f=>`<div class="face" style="grid-row:${POS[f][0]};grid-column:${POS[f][1]}">${v[f].map((c,i)=>`<i data-f="${f}" data-i="${i}"${lock(i)?' class="lk"':''} style="background:${COL[c]}"></i>`).join('')}</div>`).join('');
+  tally();
+  $('sol').hidden=!steps;
+}
+function tally(){
+  const c={'-':0};for(const f of F)c[f]=0;
+  for(const f of F)for(const x of S[f])c[x]++;
+  $('counts').innerHTML=[...F].map(f=>`<span class="chip ${c[f]==N*N?'ok':c[f]>N*N?'bad':''}"><b style="background:${COL[f]}"></b>${c[f]}/${N*N}</span>`).join('')+(c['-']?`<span class="chip">${c['-']} unpainted</span>`:'');
+  return c;
+}
+function msg(t,err){const m=$('msg');m.textContent=t;m.className=err?'err':''}
+let cubies=[],busy=false,playing=false,run=0,rx=-28,ry=-35,drag=null;
+function stop(){run++;playing=false;$('play').textContent='▶ Play'}
+const AX={U:['y',-1],D:['y',1],R:['x',1],L:['x',-1],F:['z',1],B:['z',-1]};
+const exposed=(f,x,y,z)=>({U:y==0,D:y==N-1,F:z==N-1,B:z==0,R:x==N-1,L:x==0})[f];
+const idx=(f,x,y,z)=>{const n=N-1;return({U:z*N+x,D:(n-z)*N+x,F:y*N+x,B:y*N+n-x,R:y*N+n-z,L:y*N+z})[f]};
+function view3d(){$('cube').style.transform=`rotateX(${rx}deg) rotateY(${ry}deg)`}
+function build3d(){
+  const el=$('cube'),s=N==2?110:84,h=(N-1)/2;
+  el.style.setProperty('--c',s+'px');el.innerHTML='';cubies=[];
+  for(let x=0;x<N;x++)for(let y=0;y<N;y++)for(let z=0;z<N;z++){
+    if(x>0&&x<N-1&&y>0&&y<N-1&&z>0&&z<N-1)continue;
+    const e=document.createElement('div'),base=`translate3d(${(x-h)*s}px,${(y-h)*s}px,${(z-h)*s}px)`;
+    e.className='cb';e.style.transform=base;
+    e.innerHTML=[...F].map(f=>`<u class="${f}"></u>`).join('');
+    el.appendChild(e);
+    cubies.push({e,x,y,z,base,u:Object.fromEntries([...F].map(f=>[f,e.querySelector('.'+f)]))});
+  }
+  $('sl').max=mv.length;view3d();paint3d();drawMoves();
+}
+function paint3d(){
+  const st=steps[k];
+  for(const c of cubies)for(const f of F){
+    const u=c.u[f],ex=exposed(f,c.x,c.y,c.z),i=idx(f,c.x,c.y,c.z);
+    u.className=f+(ex?' s':'');
+    u.style.background=ex?COL[inv[st[F.indexOf(f)*9+(N==2?[0,2,6,8][i]:i)]]||st[F.indexOf(f)*9+(N==2?[0,2,6,8][i]:i)]]:'';
+  }
+}
+function drawMoves(){
+  $('moves').innerHTML=[`<button class="mv${k==0?' on':''}" data-k="0">Start</button>`,...mv.map((m,i)=>`<button class="mv${i==k-1?' on':''}" data-k="${i+1}">${m.replace("'",'’')}</button>`)].join('');
+  $('pos').textContent=`· step ${k} of ${mv.length}`;$('sl').value=k;
+}
+function turn(m,rev){
+  const f=m[0],q=m[1]=="'"?-1:m[1]=='2'?2:1,[ax,sg]=AX[f],a=sg*q*90*(rev?-1:1),
+    n=N-1,grp=cubies.filter(c=>({U:c.y==0,D:c.y==n,R:c.x==n,L:c.x==0,F:c.z==n,B:c.z==0})[f]),
+    v=ax=='x'?'1,0,0':ax=='y'?'0,1,0':'0,0,1',ms=Math.abs(q)==2?750:500;
+  grp.forEach(c=>{c.e.style.transition='none';c.e.style.transform=`rotate3d(${v},0deg) ${c.base}`});
+  $('cube').offsetWidth;
+  grp.forEach(c=>{c.e.style.transition=`transform ${ms}ms cubic-bezier(.4,0,.2,1)`;c.e.style.transform=`rotate3d(${v},${a}deg) ${c.base}`});
+  return new Promise(r=>setTimeout(()=>{grp.forEach(c=>{c.e.style.transition='none';c.e.style.transform=c.base});r()},ms+20));
+}
+async function go(n,anim){
+  n=Math.max(0,Math.min(mv.length,n));
+  if(busy||n==k)return;
+  busy=true;
+  if(anim&&Math.abs(n-k)==1){await turn(mv[Math.min(n,k)],n<k);if(!steps){busy=false;return}}
+  k=n;paint3d();drawMoves();busy=false;
+}
+async function play(){
+  if(playing){stop();return}
+  const id=++run;playing=true;$('play').textContent='⏸ Pause';
+  if(k>=mv.length)await go(0);
+  while(id==run&&k<mv.length){await go(k+1,1);await new Promise(r=>setTimeout(r,150))}
+  if(id==run)stop();
+}
+const sc=$('scene');
+sc.onpointerdown=e=>{drag=[e.clientX,e.clientY];sc.setPointerCapture(e.pointerId)};
+sc.onpointermove=e=>{if(!drag)return;ry+=(e.clientX-drag[0])*.6;rx=Math.max(-90,Math.min(90,rx-(e.clientY-drag[1])*.6));drag=[e.clientX,e.clientY];view3d()};
+sc.onpointerup=sc.onpointercancel=()=>{drag=null};
+$('sl').oninput=e=>{stop();go(+e.target.value)};
+
+function paint(e){
+  if(net.querySelector('.bd'))mark([]);
+  if(steps){stop();steps=null;render()}
+  const el=document.elementFromPoint(e.clientX,e.clientY);
+  if(!el||!el.dataset.f)return;
+  const f=el.dataset.f,i=+el.dataset.i;
+  if(lock(i)||S[f][i]==brush)return;
+  S[f][i]=brush;el.style.background=COL[brush];tally();
+}
+net.addEventListener('pointerdown',e=>{down=true;paint(e)});
+net.addEventListener('pointermove',e=>{if(down)paint(e)});
+addEventListener('pointerup',()=>down=false);
+addEventListener('pointercancel',()=>down=false);
+
+let inv={};
+function toStr(){
+  let s='',m={};inv={};
+  if(N==3){for(const f of F){m[S[f][4]]=f;inv[f]=S[f][4]}if(Object.keys(m).length<6||m['-'])return ''}
+  for(const f of F)for(let i=0;i<9;i++)
+    s+=N==3?m[S[f][i]]:([0,2,6,8].includes(i)?S[f][[0,2,6,8].indexOf(i)]:f);
+  return s;
+}
+async function solve(){
+  stop();steps=null;render();
+  const c=tally();
+  if(F.split('').some(f=>c[f]!=N*N)){
+    msg(`Each colour needs exactly ${N*N} stickers — check the counts above.`,1);return;
+  }
+  if(N>3){
+    msg('You can paint and check 4×4 and bigger cubes here, but the solver covers 2×2 and 3×3 for now.',1);return;
+  }
+  msg(ok?'Solving…':'Solver is still warming up, one sec…');
+  await ready;msg('Solving…');
+  await new Promise(r=>setTimeout(r,20));
+  try{
+    const s=toStr(),swapped=s.slice(0,10)+'F'+s.slice(11,19)+'R'+s.slice(20);
+    const v=chk(s),w=why(v);
+    if(!s){msg('The six centres need six different colours.',1);return}
+    if(w){mark(v.bad);msg(w,1);return}
+    let base=null,out=null;
+    for(const t of N==2?[v.cp?swapped:s]:[s]){
+      let r;try{r=await ask(t)}catch(e){continue}
+      if(r==null)continue;
+      const v=Cube.fromString(t);v.move(r);
+      if(v.isSolved()){base=t;out=r.trim();break}
+    }
+    if(base===null){msg('That cube can’t be solved as painted — a sticker is probably the wrong colour (a twisted corner, flipped edge or swapped piece). Re-check the faces.',1);return}
+    if(out===''){msg('Already solved.');return}
+    mv=out.split(/\s+/);steps=[base];
+    for(const m of mv){const x=Cube.fromString(steps[steps.length-1]);x.move(m);steps.push(x.asString())}
+    k=0;render();build3d();msg(`Solved in ${mv.length} moves. Step through below.`);
+  }catch(e){msg('The solver library didn’t load. Check your connection and try again.',1)}
+}
+
+$('sizes').innerHTML=[2,3,4,5,6,7].map(n=>`<button data-n="${n}" aria-pressed="${n==N}">${n}×${n}</button>`).join('');
+$('sizes').onclick=e=>{
+  const n=+e.target.dataset.n;if(!n)return;
+  stop();N=n;steps=null;reset();msg('');
+  [...$('sizes').children].forEach(b=>b.setAttribute('aria-pressed',+b.dataset.n==N));render();
+};
+$('pal').innerHTML=[...F,'-'].map(f=>`<button class="sw" data-c="${f}" title="${NM[f]}" aria-label="${NM[f]}" aria-pressed="${f==brush}" style="background:${COL[f]}"></button>`).join('');
+$('pal').onclick=e=>{
+  const c=e.target.dataset.c;if(!c)return;brush=c;
+  [...$('pal').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.c==brush));
+};
+$('solve').onclick=solve;
+$('reset').onclick=()=>{stop();steps=null;reset();msg('');render()};
+$('clear').onclick=()=>{stop();steps=null;clr();msg('');render()};
+$('scr').onclick=()=>{
+  if(N>3){msg('Random scramble works on 2×2 and 3×3.',1);return}
+  try{
+    const t=Cube.random().asString();
+    stop();steps=null;reset();
+    [...F].forEach((f,fi)=>{for(let i=0;i<N*N;i++)S[f][i]=t[fi*9+(N==2?[0,2,6,8][i]:i)]});
+    render();msg('Random legal scramble (white up, green front). Hit Solve to test, or compare it with how you paint your own cube.');
+  }catch(e){msg('The solver library didn’t load, so scramble isn’t available.',1)}
+};
+$('first').onclick=()=>{stop();go(0)};
+$('prev').onclick=()=>{stop();go(k-1,1)};
+$('next').onclick=()=>{stop();go(k+1,1)};
+$('moves').onclick=e=>{const d=e.target.dataset.k;if(d!==undefined){stop();go(+d,1)}};
+$('play').onclick=play;
+addEventListener('keydown',e=>{
+  if(!steps||e.target.tagName=='INPUT'||e.altKey||e.ctrlKey||e.metaKey)return;
+  if(e.key=='ArrowRight'){e.preventDefault();stop();go(k+1,1)}
+  else if(e.key=='ArrowLeft'){e.preventDefault();stop();go(k-1,1)}
+});
+let wk=null,ok=false,up=false,jid=0,pend={},done,ready=new Promise(r=>done=()=>{ok=true;r()});
+const ask=s=>wk?new Promise(r=>{const id=++jid;pend[id]=r;wk.postMessage({id,s});setTimeout(()=>{if(pend[id]){delete pend[id];r(null)}},25000)}):Promise.resolve(Cube.fromString(s).solve());
+const CF=[[8,9,20],[6,18,38],[0,36,47],[2,45,11],[29,26,15],[27,44,24],[33,53,42],[35,17,51]],
+CC=['URF','UFL','ULB','UBR','DFR','DLF','DBL','DRB'],
+EF=[[5,10],[7,19],[3,37],[1,46],[32,16],[28,25],[30,43],[34,52],[23,12],[21,41],[50,39],[48,14]],
+EC=['UR','UF','UL','UB','DR','DF','DL','DB','FR','FL','BL','BR'];
+function chk(s){
+  const bad=new Set(),seen={c:{},e:{}},cp=[],ep=[];let co=0,eo=0;
+  CF.forEach(t=>{
+    const c=t.map(i=>s[i]),o=c.findIndex(x=>x=='U'||x=='D'),
+      j=o<0?-1:CC.findIndex(p=>p[0]==c[o]&&p[1]==c[(o+1)%3]&&p[2]==c[(o+2)%3]);
+    if(j<0)t.forEach(i=>bad.add(i));else{(seen.c[j]=seen.c[j]||[]).push(t);cp.push(j);co+=o}
+  });
+  EF.forEach(t=>{
+    const a=s[t[0]],b=s[t[1]];let o=0,j=EC.findIndex(p=>p[0]==a&&p[1]==b);
+    if(j<0){o=1;j=EC.findIndex(p=>p[0]==b&&p[1]==a)}
+    if(j<0)t.forEach(i=>bad.add(i));else{(seen.e[j]=seen.e[j]||[]).push(t);ep.push(j);eo+=o}
+  });
+  for(const g of [seen.c,seen.e])for(const j in g)if(g[j].length>1)g[j].forEach(t=>t.forEach(i=>bad.add(i)));
+  const par=p=>{let n=0;for(let i=0;i<p.length;i++)for(let j=i+1;j<p.length;j++)if(p[i]>p[j])n++;return n%2};
+  return{bad:[...bad],tw:co%3,fl:eo%2,cp:par(cp),ep:par(ep)};
+}
+const why=v=>v.bad.length?'Some pieces can’t exist on a real cube — they’re outlined in red (a corner or edge with opposite colours, or the same piece twice). Those stickers, or the whole face they sit on, are painted wrong.':v.tw?'One corner is twisted in place, which can’t happen on a real cube. Two stickers on a corner are swapped.':v.fl?'One edge is flipped in place, which can’t happen on a real cube. Two stickers on an edge are swapped.':N==3&&v.cp!=v.ep?'Two pieces look swapped, which can’t happen on a real cube. Re-check the faces.':'';
+function mark(b){
+  net.querySelectorAll('.bd').forEach(e=>e.classList.remove('bd'));
+  for(const i of b){
+    const f=F[Math.floor(i/9)];let l=i%9;
+    if(N==2){l=[0,2,6,8].indexOf(l);if(l<0)continue}
+    const e=net.querySelector(`[data-f="${f}"][data-i="${l}"]`);if(e)e.classList.add('bd');
+  }
+}
+function fb(){if(up||ok)return;if(wk)wk.terminate();wk=null;setTimeout(()=>{try{Cube.initSolver()}catch(e){}done()},30)}
+function warm(){
+  msg('Warming up the solver in the background…');
+  try{
+    const u='https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/';
+    wk=new Worker(URL.createObjectURL(new Blob([`importScripts('${u}cube.js','${u}solve.js');Cube.initSolver();postMessage({ready:1});onmessage=e=>{let r=null;try{r=Cube.fromString(e.data.s).solve()}catch(x){}postMessage({id:e.data.id,r})}`],{type:'text/javascript'})));
+    wk.onmessage=e=>{
+      if(e.data.ready){up=true;done();if($('msg').textContent.startsWith('Warming'))msg('Solver ready.')}
+      else{const f=pend[e.data.id];if(f){f(e.data.r);delete pend[e.data.id]}}
+    };
+    wk.onerror=fb;
+    setTimeout(fb,12000);
+  }catch(e){fb()}
+}
+reset();render();warm();
+</script>
+</body>
+</html>
